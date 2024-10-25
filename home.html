@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factura Detallada</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- SheetJS -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Custom CSS -->
+    <style>
+        body {
+    background-color: #f8f9fa;
+    font-family: 'Arial', sans-serif;
+    }
+
+    .container {
+        margin-top: 50px;
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 12px; /* Bordes redondeados */
+        box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+        opacity: 0;
+        transform: translateY(-20px);
+        animation: fadeInMove 1s forwards;
+    }
+
+    @keyframes fadeInMove {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    table {
+        margin-bottom: 20px;
+        border-collapse: separate; /* Permitir bordes redondeados */
+        border-radius: 12px; /* Bordes redondeados */
+        overflow: hidden; /* Evitar que el contenido sobresalga */
+        width: 100%; /* Hacer la tabla más responsiva */
+    }
+
+    #dataTable th {
+        background-color: #800020; /* Rojo vino */
+        color: #ffffff;
+        transition: transform 0.3s ease-in-out;
+        border-top-left-radius: 12px; /* Bordes redondeados para las esquinas superiores */
+        border-top-right-radius: 12px; 
+    }
+
+    #dataTable th:hover {
+        transform: scale(1.05);
+    }
+
+    #dataTable td {
+        border-radius: 0; /* Asegurarse de que las celdas no sobresalgan */
+    }
+
+    .btn-custom {
+        margin-right: 10px;
+        background-color: #007bff;
+        border: none;
+        color: #fff;
+        transition: background-color 0.3s ease-in-out;
+        border-radius: 8px; /* Bordes redondeados */
+    }
+
+    .btn-custom:hover {
+        background-color: #0056b3;
+    }
+
+    .total-row {
+        font-weight: bold;
+    }
+
+    .fade-in {
+        opacity: 0;
+        animation: fadeIn 1s forwards;
+    }
+
+    @keyframes fadeIn {
+        to {
+            opacity: 1;
+        }
+    }
+
+    </style>
+</head>
+<body>
+    <div class="container fade-in">
+        <h2 class="text-center mb-4">Detalle de Factura</h2>
+        <table id="dataTable" class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Número de Documento</th>
+                    <th>Fecha y Hora</th>
+                    <th>Tiempo en Almacén</th>
+                    <th>Tiempo de Carga</th>
+                    <th>Tiempo de Reporte</th>
+                    <th>Tiempo de Entrega</th>
+                    <th>Total de Tiempo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>001</td>
+                    <td>2024-09-01 08:00</td>
+                    <td data-time="120">2 horas</td>
+                    <td data-time="30">30 min</td>
+                    <td data-time="10">10 min</td>
+                    <td data-time="60">1 hora</td>
+                    <td>3 horas 40 min</td>
+                </tr>
+                <!-- Otras filas aquí -->
+                <tr>
+                    <td>020</td>
+                    <td>2024-09-02 03:00</td>
+                    <td data-time="110">1 hora 50 min</td>
+                    <td data-time="25">25 min</td>
+                    <td data-time="20">20 min</td>
+                    <td data-time="50">50 min</td>
+                    <td>3 horas 25 min</td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="6" class="text-end">Tiempo Total por Día</td>
+                    <td>7 horas 5 min</td>
+                </tr>
+            </tfoot>
+        </table>
+        <div class="text-center">
+            <button class="btn btn-custom">Análisis</button>
+            <button class="btn btn-custom" id="showChartBtn">Mostrar Gráfica</button>
+            <button class="btn btn-custom" id="exportBtn">Exportar a Excel</button>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="chartModal" tabindex="-1" aria-labelledby="chartModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="chartModalLabel">Gráfica de Tiempos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <canvas id="myChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS y dependencias -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom JS -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Cambiar color de los botones al hacer click
+            document.querySelectorAll('.btn-custom').forEach(button => {
+                button.addEventListener('click', () => {
+                    button.style.backgroundColor = '#343a40';
+                    setTimeout(() => {
+                        button.style.backgroundColor = '#007bff';
+                    }, 300);
+                });
+            });
+
+            // Función para exportar la tabla a Excel
+            document.getElementById('exportBtn').addEventListener('click', function() {
+                exportTableToExcel('dataTable', 'detalle_factura');
+            });
+
+            function exportTableToExcel(tableID, filename = '') {
+                var table = document.getElementById(tableID);
+                var wb = XLSX.utils.table_to_book(table, { sheet: "Sheet1" });
+                var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
+
+                function s2ab(s) {
+                    var buf = new ArrayBuffer(s.length);
+                    var view = new Uint8Array(buf);
+                    for (var i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+                    return buf;
+                }
+
+                var blob = new Blob([s2ab(wbout)], { type: "application/octet-stream" });
+                var link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename ? filename + '.xlsx' : 'export.xlsx';
+                link.click();
+            }
+
+            // Mostrar modal con la gráfica
+            document.getElementById('showChartBtn').addEventListener('click', () => {
+                const modal = new bootstrap.Modal(document.getElementById('chartModal'));
+                modal.show();
+                drawChart();
+            });
+
+            function drawChart() {
+                const ctx = document.getElementById('myChart').getContext('2d');
+                
+                // Recoger datos de la tabla y convertir a horas
+                const almacenTime = parseInt(document.querySelector('td[data-time="120"]').dataset.time) / 60;
+                const cargaTime = parseInt(document.querySelector('td[data-time="30"]').dataset.time) / 60;
+                const reporteTime = parseInt(document.querySelector('td[data-time="10"]').dataset.time) / 60;
+                const entregaTime = parseInt(document.querySelector('td[data-time="60"]').dataset.time) / 60;
+
+                // Crear la gráfica de barras
+                const myChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Tiempo en Almacén', 'Tiempo de Carga', 'Tiempo de Reporte', 'Tiempo de Entrega'],
+                        datasets: [{
+                            label: 'Tiempos en horas',
+                            data: [almacenTime, cargaTime, reporteTime, entregaTime],
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.2)',
+                                'rgba(54, 162, 235, 0.2)',
+                                'rgba(255, 206, 86, 0.2)',
+                                'rgba(75, 192, 192, 0.2)'
+                            ],
+                            borderColor: [
+                                'rgba(255, 99, 132, 1)',
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(255, 206, 86, 1)',
+                                'rgba(75, 192, 192, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Tiempo (horas)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(tooltipItem) {
+                                        return tooltipItem.label + ': ' + tooltipItem.raw.toFixed(2) + ' horas';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
